@@ -81,6 +81,8 @@ Value *BinaryAST::codegen() {
             return Builder.CreateSub(L, R, "subtmp");
         case '*':
             return Builder.CreateMul(L, R, "multmp");
+        case '>':
+            return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_SGT,L,R,"sgttmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
         case '<':
         // TODO 3.1: '<'を実装してみよう
         // '<'のcodegenを実装して下さい。その際、以下のIRBuilderのメソッドが使えます。
