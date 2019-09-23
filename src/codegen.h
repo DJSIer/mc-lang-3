@@ -81,12 +81,14 @@ Value *BinaryAST::codegen() {
             return Builder.CreateSub(L, R, "subtmp");
         case '*':
             return Builder.CreateMul(L, R, "multmp");
+        case '<':
         // TODO 3.1: '<'を実装してみよう
         // '<'のcodegenを実装して下さい。その際、以下のIRBuilderのメソッドが使えます。
         // CreateICmp: https://llvm.org/doxygen/classllvm_1_1IRBuilder.html#a103d309fa238e186311cbeb961b5bcf4
         // llvm::CmpInst::ICMP_SLT: https://llvm.org/doxygen/classllvm_1_1CmpInst.html#a283f9a5d4d843d20c40bb4d3e364bb05
         // CreateIntCast: https://llvm.org/doxygen/classllvm_1_1IRBuilder.html#a5bb25de40672dedc0d65e608e4b78e2f
         // CreateICmpの返り値がi1(1bit)なので、CreateIntCastはそれをint64にcastするのに用います。
+        return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_SLT,L,R,"slttmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
         default:
             return LogErrorV("invalid binary operator");
     }
