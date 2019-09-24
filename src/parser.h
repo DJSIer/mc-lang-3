@@ -271,7 +271,46 @@ static std::unique_ptr<ExprAST> ParseIfExpr() {
     // 7. IfExprASTを作り、returnします。
     return llvm::make_unique<IfExprAST>(std::move(condition), std::move(t), std::move(e));
 }
+//  for i = 1, i < n, 1.0 in
+static std::unique_ptr<ExprAST> ParseForExpr() {
+    //forなのでトークンを進める
+    getNextToken();
+    if (CurTok != tok_identifier)
+        return LogError("expected identifier after for");
+    std::string IdName = lexer.getIdentifier();
+    getNextToken();
+    if (CurTok != '=')
+        return LogError("expected '=' after for");
+    getNextToken();
+    auto Start = ParseExpression();
+    if(!Start)
+        return nullptr;
+    if(CurTok != ',')
+        return LogError("expected ',' after for start value");
+    getNextToken();
 
+    auto End = ParseExpression();
+    if(!End)
+        return nullptr;
+        
+    std::unique_ptr<ExprAST> Step;
+    if(CurTok == ','){
+        getNextToken();
+        Step = ParseExpression();
+        if(!Step)
+            return nullptr;
+    }
+    if(CurTok != tok_in)
+        return LogError("expected 'in' after for");
+    getNextToken();
+
+    auto Body = ParseExpression();
+    if(!Body)
+        return nullptr;
+    return llvm::make_unique<ForExprAST>(IdName, std::move(Start),
+                                       std::move(End), std::move(Step),
+                                       std::move(Body));
+}
 // ParsePrimary - NumberASTか括弧をパースする関数
 static std::unique_ptr<ExprAST> ParsePrimary() {
     switch (CurTok) {
@@ -287,6 +326,8 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
             return ParseNumberExprInc();
         case tok_if:
             return ParseIfExpr();
+        case tok_for:
+            return ParseForExpr();
     }
 }
 
@@ -308,7 +349,7 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int CallerPrec,
 
         // 3. 二項演算子をセットする。e.g. int BinOp = CurTok;
         int BinOp = CurTok;
-        LogError("BinOp");
+
         // 4. 次のトークン(二項演算子の右のexpression)に進む。
         getNextToken();
         if(CurTok == '='){

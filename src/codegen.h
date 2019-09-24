@@ -99,7 +99,7 @@ Value *BinaryAST::codegen() {
             return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_EQ,L,R,"eqtmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
         break;
         case tok_plusassign:
-            return Builder.CreateStore(Builder.CreateAdd(L, R, "addtmp"), L);
+            return Builder.CreateAdd(L, R);
         break;
         default:
             return LogErrorV("invalid binary operator");
@@ -172,6 +172,8 @@ Value *IfExprAST::codegen() {
     // CondVが0(false)とnot-equalかどうか判定し、CondVをbool型にする。
     CondV = Builder.CreateICmpNE(
             CondV, ConstantInt::get(Context, APInt(64, 0)), "ifcond");
+    
+
     // if文を呼んでいる関数の名前
     Function *ParentFunc = Builder.GetInsertBlock()->getParent();
 
@@ -225,6 +227,60 @@ Value *IfExprAST::codegen() {
     // TODO 3.4:を実装したらコメントアウトを外して下さい。
     PN->addIncoming(ElseV, ElseBB);
     return PN;
+}
+Value *ForExprAST::codegen(){
+    Value *StartVal = Start->codegen();
+    if (!StartVal)
+        return nullptr;
+    Function *TheFunction = Builder.GetInsertBlock()->getParent();
+    BasicBlock *PreheaderBB = Builder.GetInsertBlock();
+    BasicBlock *LoopBB = BasicBlock::Create(Context, "loop", TheFunction);
+    Builder.CreateBr(LoopBB);
+    Builder.SetInsertPoint(LoopBB);
+    
+    PHINode *Variable = Builder.CreatePHI(Type::getInt64Ty(Context),
+                                      2, VarName.c_str());
+    Variable->addIncoming(StartVal, PreheaderBB);
+    
+    Value *OldVal = NamedValues[VarName];
+    NamedValues[VarName] = Variable;
+
+    if (!Body->codegen())
+        return nullptr;
+    Value *StepVal = nullptr;
+    if (Step) {
+        StepVal = Step->codegen();
+        if (!StepVal)
+            return nullptr;
+    } else {
+    // If not specified, use 1.
+        StepVal = ConstantInt::get(Context, APInt(64, 1, true));
+    }
+
+    Value *NextVar = Builder.CreateAdd(Variable, StepVal, "nextvar");
+    Value *EndCond = End->codegen();
+    if (!EndCond)
+        return nullptr;
+    EndCond = Builder.CreateICmpSLT(EndCond, ConstantInt::get(Context, APInt(64, 0, true)), "loopcond");
+    BasicBlock *LoopEndBB = Builder.GetInsertBlock();
+    BasicBlock *AfterBB = BasicBlock::Create(Context, "afterloop", TheFunction);
+
+    // Insert the conditional branch into the end of LoopEndBB.
+    Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
+
+    // Any new code will be inserted in AfterBB.
+    Builder.SetInsertPoint(AfterBB);
+    // Add a new entry to the PHI node for the backedge.
+    Variable->addIncoming(NextVar, LoopEndBB);
+
+    // Restore the unshadowed variable.
+    if (OldVal)
+        NamedValues[VarName] = OldVal;
+    else
+        NamedValues.erase(VarName);
+
+    // for expr always returns 0.0.
+    return Constant::getNullValue(Type::getInt64Ty(Context));
 }
 
 //===----------------------------------------------------------------------===//

@@ -1,0 +1,15 @@
+define i64 @myfunc(i64 %x) {
+entry:
+  br label %loop
+
+loop:                                             ; preds = %loop, %entry
+  %i = phi i64 [ 1, %entry ], [ %nextvar, %loop ]
+  %nextvar = add i64 %i, 1
+  %slttmp = icmp slt i64 %i, %x
+  %cast_i1_to_i64 = sext i1 %slttmp to i64
+  %loopcond = icmp slt i64 %cast_i1_to_i64, 0
+  br i1 %loopcond, label %loop, label %afterloop
+
+afterloop:                                        ; preds = %loop
+  ret i64 0
+}
