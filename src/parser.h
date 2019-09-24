@@ -294,6 +294,9 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int CallerPrec,
                 case '>':
                     BinOp = tok_gtassign;
                 break;
+                case '+':
+                    BinOp = tok_plusassign;
+                break;
             }
             getNextToken();
         }
