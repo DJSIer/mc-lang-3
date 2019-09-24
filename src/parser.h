@@ -286,6 +286,17 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int CallerPrec,
 
         // 4. 次のトークン(二項演算子の右のexpression)に進む。
         getNextToken();
+        if(CurTok == '='){
+            switch(BinOp){
+                case '<':
+                    BinOp = tok_ltassign;
+                break;
+                case '>':
+                    BinOp = tok_gtassign;
+                break;
+            }
+            getNextToken();
+        }
 
         // 5. 二項演算子の右のexpressionをパースする。 e.g. auto RHS = ParsePrimary();
         auto RHS = ParsePrimary();

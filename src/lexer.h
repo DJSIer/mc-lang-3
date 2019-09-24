@@ -15,7 +15,9 @@ enum Token {
     tok_number = -4,
     tok_if = -5,
     tok_then = -6,
-    tok_else = -7
+    tok_else = -7,
+    tok_ltassign = 10,
+    tok_gtassign = 11,
 };
 
 class Lexer {
@@ -77,7 +79,7 @@ class Lexer {
                 setnumVal(strtod(numStr.c_str(), nullptr));
                 return tok_number;
             }
-            
+  
 
             // TODO 1.4: コメントアウトを実装してみよう
             // '#'を読んだら、その行の末尾まで無視をするコメントアウトを実装する。
