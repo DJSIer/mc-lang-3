@@ -19,7 +19,8 @@ enum Token {
     tok_ltassign = 10,
     tok_gtassign = 11,
     tok_plusassign = 12,
-    
+    tok_inc = 13,
+    tok_dec = 14,
 };
 
 class Lexer {
