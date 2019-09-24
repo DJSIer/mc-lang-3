@@ -134,7 +134,7 @@ static std::map<char, int> BinopPrecedence;
 static int GetTokPrecedence() {
     if (!isascii(CurTok))
         return -1;
-
+    
     int tokprec = BinopPrecedence[CurTok];
     if (tokprec <= 0)
         return -1;
@@ -236,6 +236,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
         }
     }
 
+
     // 6. トークンを次に進める。
     getNextToken();
 
@@ -251,6 +252,7 @@ static std::unique_ptr<ExprAST> ParseIfExpr() {
     // 2. ifの次はbranching conditionを表すexpressionがある筈なので、
     // ParseExpressionを呼んでconditionをパースします。
     auto condition = ParseExpression();
+    
     // 3. "if x < 4 then .."のような文の場合、今のトークンは"then"である筈なので
     // それをチェックし、トークンを次に進めます。
     if(CurTok != tok_then){
@@ -306,24 +308,29 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int CallerPrec,
 
         // 3. 二項演算子をセットする。e.g. int BinOp = CurTok;
         int BinOp = CurTok;
-
+        LogError("BinOp");
         // 4. 次のトークン(二項演算子の右のexpression)に進む。
         getNextToken();
         if(CurTok == '='){
             switch(BinOp){
                 case '<':
                     BinOp = tok_ltassign;
+                    getNextToken();
                 break;
                 case '>':
                     BinOp = tok_gtassign;
+                    getNextToken();
                 break;
                 case '+':
                     BinOp = tok_plusassign;
+                    getNextToken();
+                break;
+                case '=':
+                    BinOp = tok_eq;
+                    getNextToken();
                 break;
             }
-            getNextToken();
         }
-
 
         // 5. 二項演算子の右のexpressionをパースする。 e.g. auto RHS = ParsePrimary();
         auto RHS = ParsePrimary();

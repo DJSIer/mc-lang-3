@@ -95,10 +95,11 @@ Value *BinaryAST::codegen() {
             return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_SLE,L,R,"slttmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
         case tok_gtassign:
             return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_SGE,L,R,"sgttmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
+        case tok_eq:
+            return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_EQ,L,R,"eqtmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
+        break;
         case tok_plusassign:
             return Builder.CreateStore(Builder.CreateAdd(L, R, "addtmp"), L);
-        case tok_inc:
-            return Builder.CreateAdd(L, R, "addtmp");
         break;
         default:
             return LogErrorV("invalid binary operator");
