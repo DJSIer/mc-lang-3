@@ -98,6 +98,23 @@ namespace {
 
         Value *codegen() override;
     };
+    class BlockAST : public ExprAST{
+        std::vector<std::unique_ptr<ExprAST>> block;
+        public:
+        BlockAST(std::vector<std::unique_ptr<ExprAST>>block) : block(std::move(block)){}
+        Value *codegen() override;
+    };
+    class IfExprExtendsAST : public ExprAST {
+        std::unique_ptr<ExprAST> Cond, Else;
+        std::unique_ptr<BlockAST> Then;
+        public:
+        IfExprExtendsAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<BlockAST> Then,
+                std::unique_ptr<ExprAST> Else)
+            : Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
+
+        Value *codegen() override;
+    };
+
 
     /// ForExprAST - Expression class for for/in.
     class ForExprAST : public ExprAST {
@@ -243,7 +260,30 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
     // 7. CallExprASTを構成し、返す。
     return llvm::make_unique<CallExprAST>(IdName, std::move(args));
 }
-
+static std::unique_ptr<ExprAST> ParseIfExprExtends(){
+    getNextToken();
+    auto condition = ParseExpression();
+    if(CurTok != tok_then){
+        return LogError("not then");
+    }
+    getNextToken();
+    std::vector<std::unique_ptr<ExprAST>> BA;
+    while(CurTok != tok_then){
+        auto t =  ParseExpression();
+        BA.push_back(std::move(t));
+        getNextToken();
+    }
+    auto block = llvm::make_unique<BlockAST>(std::move(BA));
+    getNextToken();
+    if(CurTok != tok_else){
+        return LogError("not else");
+    }
+    getNextToken();
+    // 6. "else"ブロックのexpressionをParseExpressionを呼んでパースします。
+    auto e =  ParseExpression();
+    // 7. IfExprASTを作り、returnします。
+    return llvm::make_unique<IfExprExtendsAST>(std::move(condition),  std::move(block) , std::move(e));
+}
 static std::unique_ptr<ExprAST> ParseIfExpr() {
     // TODO 3.3: If文のパーシングを実装してみよう。
     // 1. ParseIfExprに来るということは現在のトークンが"if"なので、
@@ -271,6 +311,7 @@ static std::unique_ptr<ExprAST> ParseIfExpr() {
     // 7. IfExprASTを作り、returnします。
     return llvm::make_unique<IfExprAST>(std::move(condition), std::move(t), std::move(e));
 }
+
 //  for i = 1, i < n, 1.0 in
 static std::unique_ptr<ExprAST> ParseForExpr() {
     //forなのでトークンを進める
@@ -292,7 +333,7 @@ static std::unique_ptr<ExprAST> ParseForExpr() {
     auto End = ParseExpression();
     if(!End)
         return nullptr;
-        
+
     std::unique_ptr<ExprAST> Step;
     if(CurTok == ','){
         getNextToken();
