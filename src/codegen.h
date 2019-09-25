@@ -158,7 +158,70 @@ Function *FunctionAST::codegen() {
     function->eraseFromParent();
     return nullptr;
 }
+Value *BlockAST::codegen(){
+    Value *bv;
+    for(auto &b: block){
+        bv = b->codegen();
+    }
+    return bv;
+}
+Value *IfExprExtendsAST::codegen(){
+    Value *CondV = Cond->codegen();
+    if (!CondV)
+        return nullptr;
+    CondV = Builder.CreateICmpNE(
+            CondV, ConstantInt::get(Context, APInt(64, 0)), "ifcond");
+    // if文を呼んでいる関数の名前
+    Function *ParentFunc = Builder.GetInsertBlock()->getParent();
+    // マージするブロック。
+    BasicBlock *ThenBB =
+        BasicBlock::Create(Context, "then", ParentFunc);
+    BasicBlock *ElseBB = BasicBlock::Create(Context, "else");
+    BasicBlock *MergeBB = BasicBlock::Create(Context, "ifcont");
+    // condition, trueだった場合のブロック、falseだった場合のブロックを登録する。
+    // https://llvm.org/doxygen/classllvm_1_1IRBuilder.html#a3393497feaca1880ab3168ee3db1d7a4
+    Builder.CreateCondBr(CondV, ThenBB, ElseBB);
 
+    // "then"のブロックを作り、その内容(expression)をcodegenする。
+    Builder.SetInsertPoint(ThenBB);
+    Value *ThenV = Then->codegen();
+    //if (!ThenV)
+        //return nullptr;
+    // "then"のブロックから出る時は"ifcont"ブロックに飛ぶ。
+    Builder.CreateBr(MergeBB);
+    // ThenBBをアップデートする。
+    ThenBB = Builder.GetInsertBlock();
+
+    // TODO 3.4: "else"ブロックのcodegenを実装しよう
+    // "then"ブロックを参考に、"else"ブロックのcodegenを実装して下さい。
+    // 注意: 20行下のコメントアウトを外して下さい。
+    Builder.SetInsertPoint(ElseBB);
+    Value *ElseV = Else->codegen();
+    if(!ElseV)
+        return nullptr;
+    Builder.CreateBr(MergeBB);
+    ElseBB = Builder.GetInsertBlock();
+
+    ParentFunc->getBasicBlockList().push_back(ElseBB);
+
+    // "ifcont"ブロックのcodegen
+    ParentFunc->getBasicBlockList().push_back(MergeBB);
+    Builder.SetInsertPoint(MergeBB);
+    // https://llvm.org/docs/LangRef.html#phi-instruction
+    // PHINodeは、"then"ブロックのValueか"else"ブロックのValue
+    // どちらをifブロック全体の返り値にするかを実行時に選択します。
+    // もちろん、"then"ブロックに入るconditionなら前者が選ばれ、そうでなければ後者な訳です。
+    // LLVM IRはSSAという"全ての変数が一度だけassignされる"規約があるため、
+    // 値を上書きすることが出来ません。従って、このように実行時にコントロールフローの
+    // 値を選択する機能が必要です。
+    PHINode *PN =
+        Builder.CreatePHI(Type::getInt64Ty(Context), 2, "iftmp");
+
+    PN->addIncoming(ThenV, ThenBB);
+    // TODO 3.4:を実装したらコメントアウトを外して下さい。
+    PN->addIncoming(ElseV, ElseBB);
+    return PN;
+}
 Value *IfExprAST::codegen() {
     // if x < 5 then x + 3 else x - 5;
     // というコードが入力だと考える。

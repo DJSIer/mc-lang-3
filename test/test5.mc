@@ -1,5 +1,6 @@
 def fib(x)
-  if x <= 2 then
-    1
-  else
-    fib(x - 1) + fib (x - 2)
+    if x > 5 then
+        x + 1;
+        x += 2 
+    else
+        x

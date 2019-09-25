@@ -252,8 +252,6 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
             getNextToken();
         }
     }
-
-
     // 6. トークンを次に進める。
     getNextToken();
 
@@ -266,18 +264,13 @@ static std::unique_ptr<ExprAST> ParseIfExprExtends(){
     if(CurTok != tok_then){
         return LogError("not then");
     }
-    getNextToken();
     std::vector<std::unique_ptr<ExprAST>> BA;
-    while(CurTok != tok_then){
+    while(CurTok != tok_else){
+        getNextToken();
         auto t =  ParseExpression();
         BA.push_back(std::move(t));
-        getNextToken();
     }
     auto block = llvm::make_unique<BlockAST>(std::move(BA));
-    getNextToken();
-    if(CurTok != tok_else){
-        return LogError("not else");
-    }
     getNextToken();
     // 6. "else"ブロックのexpressionをParseExpressionを呼んでパースします。
     auto e =  ParseExpression();
@@ -366,7 +359,7 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
         case '+':
             return ParseNumberExprInc();
         case tok_if:
-            return ParseIfExpr();
+            return ParseIfExprExtends();
         case tok_for:
             return ParseForExpr();
     }
