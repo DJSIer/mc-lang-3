@@ -99,6 +99,8 @@ Value *BinaryAST::codegen() {
             return Builder.CreateIntCast(Builder.CreateICmp(llvm::CmpInst::ICMP_EQ,L,R,"eqtmp"),Type::getInt64Ty(Context),true,"cast_i1_to_i64");
         break;
         case tok_plusassign:
+            //Builder.CreateAlloca(Builder.getInt64Ty(),nullptr,"a");
+            //Builder.CreateStore(L,Builder.CreateAlloca(Builder.getInt64Ty(),nullptr,"x"));
             return Builder.CreateAdd(L, R);
         break;
         default:
@@ -110,7 +112,7 @@ Function *PrototypeAST::codegen() {
     // MC言語では変数の型も関数の返り値もintの為、関数の返り値をInt64にする。
     std::vector<Type *> prototype(args.size(), Type::getInt64Ty(Context));
     FunctionType *FT =
-        FunctionType::get(Type::getInt64Ty(Context), prototype, false);
+        FunctionType::get(Type::getInt64PtrTy(Context), prototype, false);
     // https://llvm.org/doxygen/classllvm_1_1Function.html
     // llvm::Functionは関数のIRを表現するクラス
     Function *F =
@@ -140,6 +142,7 @@ Function *FunctionAST::codegen() {
     // Record the function arguments in the NamedValues map.
     NamedValues.clear();
     for (auto &Arg : function->args())
+        
         NamedValues[Arg.getName()] = &Arg;
 
     // 関数のbody(ExprASTから継承されたNumberASTかBinaryAST)をcodegenする
@@ -163,8 +166,10 @@ Value *BlockAST::codegen(){
     for(auto &b: block){
         bv = b->codegen();
     }
+    //最後の値をリターン(苦肉の策)
     return bv;
 }
+
 Value *IfExprExtendsAST::codegen(){
     Value *CondV = Cond->codegen();
     if (!CondV)
@@ -185,8 +190,8 @@ Value *IfExprExtendsAST::codegen(){
     // "then"のブロックを作り、その内容(expression)をcodegenする。
     Builder.SetInsertPoint(ThenBB);
     Value *ThenV = Then->codegen();
-    //if (!ThenV)
-        //return nullptr;
+    if (!ThenV)
+        return nullptr;
     // "then"のブロックから出る時は"ifcont"ブロックに飛ぶ。
     Builder.CreateBr(MergeBB);
     // ThenBBをアップデートする。
@@ -291,6 +296,102 @@ Value *IfExprAST::codegen() {
     PN->addIncoming(ElseV, ElseBB);
     return PN;
 }
+Value *IfElseExprAST::codegen() {
+    // if x < 5 then x + 3 else x - 5;
+    // というコードが入力だと考える。
+    // Cond->codegen()によって"x < 5"のcondition部分がcodegenされ、その返り値(int)が
+    // CondVに格納される。
+    Value *CondV = Cond->codegen();
+    if (!CondV)
+        return nullptr;
+
+
+    // CondVはint64でtrueなら0以外、falseなら0が入っているため、CreateICmpNEを用いて
+    // CondVが0(false)とnot-equalかどうか判定し、CondVをbool型にする。
+    CondV = Builder.CreateICmpNE(
+            CondV, ConstantInt::get(Context, APInt(64, 0)), "ifcond");
+    
+
+    // if文を呼んでいる関数の名前
+    Function *ParentFunc = Builder.GetInsertBlock()->getParent();
+
+    // "thenだった場合"と"elseだった場合"のブロックを作り、ラベルを付ける。
+    // "ifcont"はif文が"then"と"else"の処理の後、二つのコントロールフローを
+    // マージするブロック。
+    BasicBlock *ThenBB =
+        BasicBlock::Create(Context, "then", ParentFunc);
+    BasicBlock *IfElseBB = BasicBlock::Create(Context, "ifelse", ParentFunc);
+    BasicBlock *ThenBB2 =
+        BasicBlock::Create(Context, "then2", ParentFunc);
+    BasicBlock *ElseBB = BasicBlock::Create(Context, "else");
+    BasicBlock *MergeBB = BasicBlock::Create(Context, "ifcont");
+    // condition, trueだった場合のブロック、falseだった場合のブロックを登録する。
+    // https://llvm.org/doxygen/classllvm_1_1IRBuilder.html#a3393497feaca1880ab3168ee3db1d7a4
+    Builder.CreateCondBr(CondV, ThenBB, IfElseBB);    
+    // "then"のブロックを作り、その内容(expression)をcodegenする。
+    Builder.SetInsertPoint(ThenBB);
+    Value *ThenV = Then->codegen();
+    if (!ThenV)
+        return nullptr;
+    // "then"のブロックから出る時は"ifcont"ブロックに飛ぶ。
+    Builder.CreateBr(MergeBB);
+    // ThenBBをアップデートする。
+    ThenBB = Builder.GetInsertBlock();
+    
+    //Elseif
+    Builder.SetInsertPoint(IfElseBB);
+    Value *CondV2 = Cond2->codegen();
+    if(!CondV2)
+        return nullptr;
+    CondV2 = Builder.CreateICmpNE(
+            CondV2, ConstantInt::get(Context, APInt(64, 0)), "ifcond");
+    Builder.CreateCondBr(CondV2,ThenBB2,ElseBB);
+    IfElseBB = Builder.GetInsertBlock();
+    ParentFunc->getBasicBlockList().push_back(IfElseBB);
+
+
+    Builder.SetInsertPoint(ThenBB2);
+    Value *ElseifV = Elseif->codegen();
+    if (!ElseifV)
+        return nullptr;
+    // "then"のブロックから出る時は"ifcont"ブロックに飛ぶ。
+    Builder.CreateBr(MergeBB);
+    // ThenBBをアップデートする。
+    ThenBB2 = Builder.GetInsertBlock();
+    ParentFunc->getBasicBlockList().push_back(ThenBB2);
+
+
+    // TODO 3.4: "else"ブロックのcodegenを実装しよう
+    // "then"ブロックを参考に、"else"ブロックのcodegenを実装して下さい。
+    // 注意: 20行下のコメントアウトを外して下さい。
+    Builder.SetInsertPoint(ElseBB);
+    Value *ElseV = Else->codegen();
+    if(!ElseV)
+        return nullptr;
+    Builder.CreateBr(MergeBB);
+    ElseBB = Builder.GetInsertBlock();
+
+    ParentFunc->getBasicBlockList().push_back(ElseBB);
+
+    // "ifcont"ブロックのcodegen
+    ParentFunc->getBasicBlockList().push_back(MergeBB);
+    Builder.SetInsertPoint(MergeBB);
+    // https://llvm.org/docs/LangRef.html#phi-instruction
+    // PHINodeは、"then"ブロックのValueか"else"ブロックのValue
+    // どちらをifブロック全体の返り値にするかを実行時に選択します。
+    // もちろん、"then"ブロックに入るconditionなら前者が選ばれ、そうでなければ後者な訳です。
+    // LLVM IRはSSAという"全ての変数が一度だけassignされる"規約があるため、
+    // 値を上書きすることが出来ません。従って、このように実行時にコントロールフローの
+    // 値を選択する機能が必要です。
+    PHINode *PN =
+        Builder.CreatePHI(Type::getInt64Ty(Context), 2, "iftmp");
+
+    PN->addIncoming(ThenV, ThenBB);
+    PN->addIncoming(ElseifV, ThenBB2);
+    // TODO 3.4:を実装したらコメントアウトを外して下さい。
+    PN->addIncoming(ElseV, ElseBB);
+    return PN;
+}
 Value *ForExprAST::codegen(){
     Value *StartVal = Start->codegen();
     if (!StartVal)
@@ -343,7 +444,7 @@ Value *ForExprAST::codegen(){
         NamedValues.erase(VarName);
 
     // for expr always returns 0.0.
-    return Constant::getNullValue(Type::getInt64Ty(Context));
+    return NextVar;
 }
 
 //===----------------------------------------------------------------------===//

@@ -22,6 +22,7 @@ enum Token {
     tok_gtassign = 11,
     tok_plusassign = 12,
     tok_eq = 13,
+    tok_elseif = 14,
 };
 
 class Lexer {
@@ -56,6 +57,8 @@ class Lexer {
                     return tok_then;
                 if(identifierStr == "else")
                     return tok_else;
+                if(identifierStr == "elseif")
+                    return tok_elseif;
                 if(identifierStr == "for")
                     return tok_for;
                 if(identifierStr == "in")

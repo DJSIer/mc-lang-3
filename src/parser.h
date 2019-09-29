@@ -114,6 +114,18 @@ namespace {
 
         Value *codegen() override;
     };
+    class IfElseExprAST : public ExprAST {
+        std::unique_ptr<ExprAST> Cond, Then, Cond2, Elseif,Else;
+
+        public:
+        IfElseExprAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<ExprAST> Then,
+        std::unique_ptr<ExprAST> Cond2, std::unique_ptr<ExprAST> Elseif, 
+        std::unique_ptr<ExprAST> Else)
+            : Cond(std::move(Cond)), Then(std::move(Then)), Cond2(std::move(Cond2)),
+            Elseif(std::move(Elseif)), Else(std::move(Else)) {}
+
+        Value *codegen() override;
+    };
 
 
     /// ForExprAST - Expression class for for/in.
@@ -125,7 +137,8 @@ namespace {
         ForExprAST(const std::string &VarName, std::unique_ptr<ExprAST> Start,
                 std::unique_ptr<ExprAST> End, std::unique_ptr<ExprAST> Step,
                 std::unique_ptr<ExprAST> Body)
-            : VarName(VarName), Start(std::move(Start)), End(std::move(End)),Step(std::move(Step)), Body(std::move(Body)) {}
+            : VarName(VarName), Start(std::move(Start)), End(std::move(End)),
+            Step(std::move(Step)), Body(std::move(Body)) {}
 
         Value *codegen() override;
     };
@@ -258,6 +271,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
     // 7. CallExprASTを構成し、返す。
     return llvm::make_unique<CallExprAST>(IdName, std::move(args));
 }
+
 static std::unique_ptr<ExprAST> ParseIfExprExtends(){
     getNextToken();
     auto condition = ParseExpression();
@@ -304,6 +318,50 @@ static std::unique_ptr<ExprAST> ParseIfExpr() {
     // 7. IfExprASTを作り、returnします。
     return llvm::make_unique<IfExprAST>(std::move(condition), std::move(t), std::move(e));
 }
+
+static std::unique_ptr<ExprAST> ParseIfElseExpr() {
+    // TODO 3.3: If文のパーシングを実装してみよう。
+    // 1. ParseIfExprに来るということは現在のトークンが"if"なので、
+    // トークンを次に進めます。
+    getNextToken();
+    // 2. ifの次はbranching conditionを表すexpressionがある筈なので、
+    // ParseExpressionを呼んでconditionをパースします。
+    auto condition = ParseExpression();
+    
+    // 3. "if x < 4 then .."のような文の場合、今のトークンは"then"である筈なので
+    // それをチェックし、トークンを次に進めます。
+    if(CurTok != tok_then){
+        return LogError("not then");
+    }
+    getNextToken();
+    // 4. "then"ブロックのexpressionをParseExpressionを呼んでパースします。
+    auto t =  ParseExpression();
+    //elseifを期待する
+    if(CurTok != tok_elseif){
+         return LogError("not elseif");
+    }
+    getNextToken();
+    //elseifの条件取得
+    auto condition2 = ParseExpression();
+
+    if(CurTok != tok_then){
+        return LogError("not then");
+    }
+    getNextToken();
+    // 4. "then"ブロックのexpressionをParseExpressionを呼んでパースします。
+    auto ei = ParseExpression();
+
+    // 5. 3と同様、今のトークンは"else"である筈なのでチェックし、トークンを次に進めます。
+    if(CurTok != tok_else){
+        return LogError("not else");
+    }
+    getNextToken();
+    // 6. "else"ブロックのexpressionをParseExpressionを呼んでパースします。
+    auto e =  ParseExpression();
+    // 7. IfExprASTを作り、returnします。
+    return llvm::make_unique<IfElseExprAST>(std::move(condition), std::move(t),std::move(condition2),std::move(ei),std::move(e));
+}
+
 
 //  for i = 1, i < n, 1.0 in
 static std::unique_ptr<ExprAST> ParseForExpr() {
@@ -359,7 +417,7 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
         case '+':
             return ParseNumberExprInc();
         case tok_if:
-            return ParseIfExprExtends();
+            return ParseIfElseExpr();
         case tok_for:
             return ParseForExpr();
     }
